@@ -29,4 +29,5 @@
 <use name="Calibration/Tools"/>
 <use name="CondFormats/EcalObjects"/>
 <use name="CondFormats/DataRecord"/>
+<use name="DataFormats/RecoCandidate"/>
 <flags EDM_PLUGIN="1"/>

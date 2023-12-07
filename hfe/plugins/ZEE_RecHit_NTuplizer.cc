@@ -41,7 +41,7 @@
 #include "Geometry/EcalAlgo/interface/EcalPreshowerGeometry.h"
 #include "Geometry/CaloTopology/interface/EcalPreshowerTopology.h"
 #include "Geometry/Records/interface/CaloGeometryRecord.h"
-#include "Geometry/CaloEventSetup/interface/CaloTopologyRecord.h"
+#include "Geometry/Records/interface/CaloTopologyRecord.h"
 #include "Geometry/CaloTopology/interface/CaloTopology.h"
 
 #include "DataFormats/EgammaCandidates/interface/Photon.h"
@@ -71,6 +71,12 @@
 #include "DataFormats/EcalDetId/interface/ESDetId.h"
 #include "DataFormats/EcalRecHit/interface/EcalRecHit.h"
 #include "DataFormats/EcalRecHit/interface/EcalRecHitCollections.h"
+#include "DataFormats/RecoCandidate/interface/RecoEcalCandidate.h"
+#include "DataFormats/RecoCandidate/interface/RecoEcalCandidateFwd.h"
+#include "DataFormats/EgammaReco/interface/SuperClusterFwd.h"
+#include "DataFormats/EgammaReco/interface/HFEMClusterShapeAssociation.h"
+#include "DataFormats/EgammaReco/interface/HFEMClusterShape.h"
+
 //
 //
 // class declaration
@@ -160,6 +166,31 @@ class ZEE_RecHit_NTuplizer : public edm::one::EDAnalyzer<edm::one::SharedResourc
      std::vector<float> Ele_SC_ESEnByRawE;
      std::vector<float> Ele_HadOverEm;
 
+     std::vector<float> HFEMClust_pt_;
+     std::vector<float> HFEMClust_eta_;
+     std::vector<float> HFEMClust_phi_;
+     std::vector<float> HFEMClust_energy_;
+    //energy in long or short fibers various cluster sizes
+     std::vector<float> HFEMClust_eLong1x1_;
+     std::vector<float> HFEMClust_eShort1x1_;
+     std::vector<float> HFEMClust_eLong3x3_;
+     std::vector<float> HFEMClust_eShort3x3_;
+     std::vector<float> HFEMClust_eLong5x5_;
+     std::vector<float> HFEMClust_eShort5x5_;
+    //total energy in various clusters
+     std::vector<float> HFEMClust_e1x1_;
+     std::vector<float> HFEMClust_e3x3_;
+     std::vector<float> HFEMClust_e5x5_;
+    //Identification Variables
+     std::vector<float> HFEMClust_eSeL_; //Longitudinal variable: E(3x3,short fibers)/E(3x3,long fibers)
+     std::vector<float> HFEMClust_eCOREe9_; // Transverse Variable: E(Core of cluster)/E(3x3)
+     std::vector<float> HFEMClust_e9e25_; // Shower Exclusion Variable: E(3x3)/E(5x5)
+     std::vector<float> HFEMClust_eCore_; // energy in central highest energy cells (at least 50% energy of previous total energy startign with seed cell)
+
+
+	
+	
+
      std::vector<float> Ele_Gen_Pt;
      std::vector<float> Ele_Gen_Eta;
      std::vector<float> Ele_Gen_Phi;
@@ -174,23 +205,27 @@ class ZEE_RecHit_NTuplizer : public edm::one::EDAnalyzer<edm::one::SharedResourc
      std::vector<int> isTrue_;
 
       // -----------------Handles--------------------------
-      edm::Handle<double> rhoHandle;
       edm::Handle<EcalRecHitCollection> EBRechitsHandle;
       edm::Handle<EcalRecHitCollection> EERechitsHandle;
       edm::Handle<EcalRecHitCollection> ESRechitsHandle;
-      edm::Handle<edm::View<reco::GsfElectron> > electrons;
-      edm::Handle<edm::View<reco::GenParticle> > genParticles;
-      edm::Handle<edm::ValueMap<bool> > medium_id_decisions;
-      edm::Handle<edm::ValueMap<bool> > tight_id_decisions;
+      edm::Handle<reco::RecoEcalCandidateCollection> HFElectrons;
+      edm::Handle<reco::SuperClusterCollection> HFSC;
+      edm::Handle<reco::HFEMClusterShapeAssociationCollection> HFClusterCollection;
+      edm::Handle<edm::View<reco::GsfElectron> > electrons;  
+//      edm::Handle<edm::View<reco::GenParticle> > genParticles;
+//      edm::Handle<edm::ValueMap<bool> > medium_id_decisions;
+//      edm::Handle<edm::ValueMap<bool> > tight_id_decisions;
       //---------------- Input Tags-----------------------
-      edm::EDGetTokenT<double> rhoToken_;
       edm::EDGetTokenT<EcalRecHitCollection> recHitCollectionEBToken_;
       edm::EDGetTokenT<EcalRecHitCollection> recHitCollectionEEToken_;
       edm::EDGetTokenT<EcalRecHitCollection> recHitCollectionESToken_;
+      edm::EDGetTokenT<reco::RecoEcalCandidateCollection> HFElectronsToken_;
+      edm::EDGetTokenT<reco::SuperClusterCollection> HFSCToken_;
+      edm::EDGetTokenT<reco::HFEMClusterShapeAssociationCollection> HFClusterToken_;
       edm::EDGetToken electronsToken_;
-      edm::EDGetTokenT<edm::View<reco::GenParticle> > genParticlesToken_;
-      edm::EDGetTokenT<edm::ValueMap<bool> > eleMediumIdMapToken_;
-      edm::EDGetTokenT<edm::ValueMap<bool> > eleTightIdMapToken_;
+//      edm::EDGetTokenT<edm::View<reco::GenParticle> > genParticlesToken_;
+//      edm::EDGetTokenT<edm::ValueMap<bool> > eleMediumIdMapToken_;
+//      edm::EDGetTokenT<edm::ValueMap<bool> > eleTightIdMapToken_;
 
 
 };
@@ -207,16 +242,16 @@ class ZEE_RecHit_NTuplizer : public edm::one::EDAnalyzer<edm::one::SharedResourc
 // constructors and destructor
 //
 ZEE_RecHit_NTuplizer::ZEE_RecHit_NTuplizer(const edm::ParameterSet& iConfig):
-   rhoToken_(consumes<double>(iConfig.getParameter<edm::InputTag>("rhoFastJet"))),
    recHitCollectionEBToken_(consumes<EcalRecHitCollection>(edm::InputTag("reducedEcalRecHitsEB"))),
    recHitCollectionEEToken_(consumes<EcalRecHitCollection>(edm::InputTag("reducedEcalRecHitsEE"))),
    recHitCollectionESToken_(consumes<EcalRecHitCollection>(edm::InputTag("reducedEcalRecHitsES"))),
-   eleMediumIdMapToken_(consumes<edm::ValueMap<bool> >(iConfig.getParameter<edm::InputTag>("eleMediumIdMap"))),
-   eleTightIdMapToken_(consumes<edm::ValueMap<bool> >(iConfig.getParameter<edm::InputTag>("eleTightIdMap")))
+   HFElectronsToken_(consumes<reco::RecoEcalCandidateCollection>(edm::InputTag("hfRecoEcalCandidate"))),
+   HFSCToken_(consumes<reco::SuperClusterCollection>(edm::InputTag("hfEMClusters"))),
+   HFClusterToken_(consumes<reco::HFEMClusterShapeAssociationCollection>(edm::InputTag("hfEMClusters"))) 
 {
    //now do what ever initialization is needed
    electronsToken_ = mayConsume<edm::View<reco::GsfElectron> >(iConfig.getParameter<edm::InputTag>("electrons"));
-   genParticlesToken_ = mayConsume<edm::View<reco::GenParticle> >(iConfig.getParameter<edm::InputTag>("genParticles"));
+//   genParticlesToken_ = mayConsume<edm::View<reco::GenParticle> >(iConfig.getParameter<edm::InputTag>("genParticles"));
    usesResource("TFileService");
 }
 
@@ -245,28 +280,13 @@ ZEE_RecHit_NTuplizer::analyze(const edm::Event& iEvent, const edm::EventSetup& i
    using namespace std;
    using namespace reco;
 
-   iEvent.getByToken(rhoToken_, rhoHandle);
    iEvent.getByToken(recHitCollectionEBToken_, EBRechitsHandle);
    iEvent.getByToken(recHitCollectionEEToken_, EERechitsHandle);
    iEvent.getByToken(recHitCollectionESToken_, ESRechitsHandle);
+   iEvent.getByToken(HFElectronsToken_, HFElectrons);
+   iEvent.getByToken(HFSCToken_, HFSC);
+   iEvent.getByToken(HFClusterToken_, HFClusterCollection);
    iEvent.getByToken(electronsToken_, electrons);
-   iEvent.getByToken(genParticlesToken_, genParticles);
-   iEvent.getByToken(eleMediumIdMapToken_, medium_id_decisions);
-   iEvent.getByToken(eleTightIdMapToken_ , tight_id_decisions);
-
-
-   ESHandle<CaloGeometry> pG;
-   iSetup.get<CaloGeometryRecord>().get(pG);
-   const CaloGeometry* geo = pG.product();
-   const CaloSubdetectorGeometry* ecalEBGeom = static_cast<const CaloSubdetectorGeometry*>(geo->getSubdetectorGeometry(DetId::Ecal, EcalBarrel));
-   const CaloSubdetectorGeometry* ecalEEGeom = static_cast<const CaloSubdetectorGeometry*>(geo->getSubdetectorGeometry(DetId::Ecal, EcalEndcap));
-
-/////////////////////////////PU related variables////////////////////////////////////////////////////
-   rho = *rhoHandle;
-///////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-   clustertools_NoZS = new noZS::EcalClusterLazyTools(iEvent, iSetup, recHitCollectionEBToken_, recHitCollectionEEToken_);
 
 //Clear all vectors to be written to the tree
    ClearTreeVectors();
@@ -274,8 +294,6 @@ ZEE_RecHit_NTuplizer::analyze(const edm::Event& iEvent, const edm::EventSetup& i
 
 ///////////////////////////Fill Electron/Photon related stuff/////////////////////////////////////////////////////
    nElectrons_ = 0;
-   const EcalRecHitCollection *recHitsEB = clustertools_NoZS->getEcalEBRecHitCollection();
-   const EcalRecHitCollection *recHitsEE = clustertools_NoZS->getEcalEERecHitCollection();
 
    for (size_t i = 0; i < electrons->size(); ++i){
 	if(electrons->size() > 2) break;
@@ -283,55 +301,6 @@ ZEE_RecHit_NTuplizer::analyze(const edm::Event& iEvent, const edm::EventSetup& i
         if( ele->pt() < 1. ) continue;
 	if(!(ele->ecalDrivenSeed())) continue;
 	if(ele->parentSuperCluster().isNull()) continue;
-	const SuperClusterRef& sc = ele->parentSuperCluster();
-	std::vector< std::pair<DetId, float> > hitsAndFractions = sc->hitsAndFractions();
-	isEB = ((*sc->seed()).hitsAndFractions().at(0).first.subdetId() == EcalBarrel);
-	isEE = ((*sc->seed()).hitsAndFractions().at(0).first.subdetId() == EcalEndcap);
-//	if(!isEB) continue;
-	EBDetId* DidEB;
-	EEDetId* DidEE;
-//	DetId*   Did;
-	EcalRecHitCollection::const_iterator oneHit;
-        for (const auto&  detitr : hitsAndFractions) {
-		if(isEB){
-			DidEB = new EBDetId(detitr.first.rawId());
-			DetId Did   = detitr.first.rawId();
-                        shared_ptr<const CaloCellGeometry> geom = ecalEBGeom->getGeometry(Did);
-//			cout << "Barrel" << std::setprecision(4) << " Eta = " <<geom->etaPos() << " : " <<" Phi = "<< geom->phiPos() << " 3D position" << geom->getPosition().z() << endl;
-			oneHit = recHitsEB->find( (detitr.first) ) ;
-			iEta[i].push_back(DidEB->ieta());
-			iPhi[i].push_back(DidEB->iphi());
-			Hit_Eta[i].push_back(geom->etaPos());
-			Hit_Phi[i].push_back(geom->phiPos());
-			Hit_X[i].push_back(geom->getPosition().x());
-			Hit_Y[i].push_back(geom->getPosition().y());
-			Hit_Z[i].push_back(geom->getPosition().z());
-		}
-		else if(isEE){
-			DidEE = new EEDetId(detitr.first.rawId());
-			DetId Did   = detitr.first.rawId();
-			shared_ptr<const CaloCellGeometry> geom = ecalEEGeom->getGeometry(Did);
-//			cout << "Endcap" <<std::setprecision(4) << " Eta = " <<geom->etaPos() << " : " <<" Phi = "<< geom->phiPos() << " Crystal Z : " << geom->getPosition().z() << endl;
-                        oneHit = recHitsEE->find( (detitr.first) ) ;
-                        iEta[i].push_back(DidEE->ix());
-                        iPhi[i].push_back(DidEE->iy());
-			Hit_Eta[i].push_back(geom->etaPos());
-                        Hit_Phi[i].push_back(geom->phiPos());
-                        Hit_X[i].push_back(geom->getPosition().x());
-                        Hit_Y[i].push_back(geom->getPosition().y());
-                        Hit_Z[i].push_back(geom->getPosition().z());
-		}
-	
-		RecHitEn[i].push_back(oneHit->energy());
-		RecHitFrac[i].push_back(detitr.second);
-
-//		cout<<endl<<" IEta = "<< Did->ieta() << " IPhi = "<< Did->iphi()  << " The fraction is  =  "<< detitr.second << " Energy is = "<< oneHit->energy() <<endl;		
-	}  
-
-	if(isEE){
-		GetESPlaneRecHits(*sc, geo, i, 1);     
- 		GetESPlaneRecHits(*sc, geo, i, 2);
-	}
 
         nElectrons_++;
         Ele_pt_.push_back( ele->pt() );
@@ -339,7 +308,6 @@ ZEE_RecHit_NTuplizer::analyze(const edm::Event& iEvent, const edm::EventSetup& i
         Ele_phi_.push_back( ele->superCluster()->phi() );
         Ele_energy_.push_back( ele->energy() );
 	Ele_ecal_energy_.push_back( ele->correctedEcalEnergy() );
-	Ele_ecal_mustache_energy_.push_back( sc->energy() );
         Ele_R9.push_back(ele->full5x5_r9());
         Ele_SigIEIE.push_back(ele->full5x5_sigmaIetaIeta());
         Ele_SigIPhiIPhi.push_back(ele->full5x5_sigmaIphiIphi());
@@ -347,35 +315,44 @@ ZEE_RecHit_NTuplizer::analyze(const edm::Event& iEvent, const edm::EventSetup& i
         Ele_SCPhiW.push_back(ele->superCluster()->phiWidth());
 	Ele_HadOverEm.push_back(ele->hadronicOverEm());
         const CaloClusterPtr seed_clu = ele->superCluster()->seed();
-//        if (!seed_clu) continue;
-//        Ele_CovIEtaIEta.push_back(clustertools_NoZS->localCovariances(*seed_clu)[0]);
-//        Ele_CovIEtaIPhi.push_back(clustertools_NoZS->localCovariances(*seed_clu)[1]);
-//	Ele_ESSigRR.push_back(clustertools->eseffsirir( *(ele->superCluster()) ) );
 	Ele_SCRawE.push_back(ele->superCluster()->rawEnergy());
         Ele_SC_ESEnByRawE.push_back( (ele->superCluster()->preshowerEnergy())/(ele->superCluster()->rawEnergy()) );
-//        Ele_S4.push_back(clustertools_NoZS->e2x2( *seed_clu ) / clustertools_NoZS->e5x5( *seed_clu ) );
 
-
- // Look up and save the ID decisions
-//   	bool isPassMedium = (*medium_id_decisions)[ele];
-//        bool isPassTight  = (*tight_id_decisions)[ele];
-//        passMediumId_.push_back( (int) isPassMedium);
-//        passTightId_.push_back ( (int) isPassTight );
    }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+//////////////////////////////////HFCluster variables/////////////////////////////////////////////
 
-//////////////////////// Gen Stuff hardcaded for status 1 electrons for now /////////////////////////////////////
-  for(edm::View<GenParticle>::const_iterator part = genParticles->begin(); part != genParticles->end(); ++part){
-        if( part->status()==1  && abs(part->pdgId())==11 ){
-                Ele_Gen_Pt.push_back(part->pt());
-                Ele_Gen_Eta.push_back(part->eta());
-                Ele_Gen_Phi.push_back(part->phi());
-                Ele_Gen_E.push_back(part->energy());
-        }
-  }
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//   std::cout<<std::endl<<" HFClusters = "<<HFClusterCollection->size()<<" HFElectrons = "<<HFSC->size()<<std::endl;
+   for (unsigned int iii = 0; iii < HFSC->size(); ++iii){
+//	std::cout<<std::endl<<" Iteration number = "<<iii++<<std::endl;
+	const SuperCluster& supClus = (*HFSC)[iii];	
+	reco::SuperClusterRef theClusRef = edm::Ref<reco::SuperClusterCollection>(HFSC, iii);	
+	const HFEMClusterShapeRef clusShapeRef = HFClusterCollection->find(theClusRef)->val;
+	const HFEMClusterShape& clusShape=*clusShapeRef;
+
+        HFEMClust_pt_.push_back(supClus.energy()/cosh(supClus.eta()) );
+        HFEMClust_eta_.push_back(supClus.eta());
+        HFEMClust_phi_.push_back(supClus.phi());
+        HFEMClust_energy_.push_back(supClus.energy());
+        HFEMClust_eLong1x1_.push_back(clusShape.eLong1x1());
+        HFEMClust_eShort1x1_.push_back(clusShape.eShort1x1());
+        HFEMClust_eLong3x3_.push_back(clusShape.eLong3x3());
+        HFEMClust_eShort3x3_.push_back(clusShape.eShort3x3());
+        HFEMClust_eLong5x5_.push_back(clusShape.eLong5x5());
+        HFEMClust_eShort5x5_.push_back(clusShape.eShort5x5());
+        HFEMClust_e1x1_.push_back(clusShape.e1x1());
+        HFEMClust_e3x3_.push_back(clusShape.e3x3());
+        HFEMClust_e5x5_.push_back(clusShape.e5x5());
+        HFEMClust_eSeL_.push_back(clusShape.eSeL());
+        HFEMClust_eCOREe9_.push_back(clusShape.eCOREe9());
+        HFEMClust_e9e25_.push_back(clusShape.e9e25());
+        HFEMClust_eCore_.push_back(clusShape.eCore());
+
+   }
+
+///////////////////////////////////////////////////////////////////////////////////////
 
 /////////////////////////Run, event, lumi//////////////////////////////////
    run=iEvent.id().run();
@@ -387,7 +364,6 @@ ZEE_RecHit_NTuplizer::analyze(const edm::Event& iEvent, const edm::EventSetup& i
 
    T->Fill(); // Write out the events
 
-   delete clustertools_NoZS;
 
 #ifdef THIS_IS_AN_EVENTSETUP_EXAMPLE
    ESHandle<SetupData> pSetup;
@@ -459,7 +435,25 @@ ZEE_RecHit_NTuplizer::beginJob()
         T->Branch("Ele_SCRawE"  ,  &Ele_SCRawE);
         T->Branch("Ele_SC_ESEnByRawE"  ,  &Ele_SC_ESEnByRawE);
 	T->Branch("Ele_HadOverEm"  ,  &Ele_HadOverEm);
-
+	
+	T->Branch("HFEMClust_pt", &HFEMClust_pt_);
+	T->Branch("HFEMClust_eta", &HFEMClust_eta_);
+        T->Branch("HFEMClust_phi", &HFEMClust_phi_);
+        T->Branch("HFEMClust_energy", &HFEMClust_energy_);
+        T->Branch("HFEMClust_eLong1x1", &HFEMClust_eLong1x1_);
+        T->Branch("HFEMClust_eShort1x1", &HFEMClust_eShort1x1_);
+        T->Branch("HFEMClust_eLong3x3", &HFEMClust_eLong3x3_);
+        T->Branch("HFEMClust_eShort3x3", &HFEMClust_eShort3x3_);
+        T->Branch("HFEMClust_eLong5x5", &HFEMClust_eLong5x5_);
+        T->Branch("HFEMClust_eShort5x5", &HFEMClust_eShort5x5_);
+        T->Branch("HFEMClust_e1x1", &HFEMClust_e1x1_);
+        T->Branch("HFEMClust_e3x3", &HFEMClust_e3x3_);
+        T->Branch("HFEMClust_e5x5", &HFEMClust_e5x5_);
+        T->Branch("HFEMClust_eSeL", &HFEMClust_eSeL_);
+        T->Branch("HFEMClust_eCOREe9", &HFEMClust_eCOREe9_);
+        T->Branch("HFEMClust_e9e25", &HFEMClust_e9e25_);
+        T->Branch("HFEMClust_eCore", &HFEMClust_eCore_);
+	
         T->Branch("Ele_Gen_Pt" , &Ele_Gen_Pt);
         T->Branch("Ele_Gen_Eta" , &Ele_Gen_Eta);
         T->Branch("Ele_Gen_Phi" , &Ele_Gen_Phi);
@@ -587,6 +581,25 @@ void ZEE_RecHit_NTuplizer::ClearTreeVectors()
 	Ele_SCRawE.clear();
 	Ele_SC_ESEnByRawE.clear();
 	Ele_HadOverEm.clear();
+
+	HFEMClust_pt_.clear();
+	HFEMClust_eta_.clear();
+	HFEMClust_phi_.clear();
+	HFEMClust_energy_.clear();
+	HFEMClust_eLong1x1_.clear();
+	HFEMClust_eShort1x1_.clear();
+	HFEMClust_eLong3x3_.clear();
+	HFEMClust_eShort3x3_.clear();
+	HFEMClust_eLong5x5_.clear();
+	HFEMClust_eShort5x5_.clear();
+	HFEMClust_e1x1_.clear();
+	HFEMClust_e3x3_.clear();
+	HFEMClust_e5x5_.clear();
+	HFEMClust_eSeL_.clear();
+	HFEMClust_eCOREe9_.clear();
+	HFEMClust_e9e25_.clear(); 
+	HFEMClust_eCore_.clear();
+
 
 	Ele_Gen_Pt.clear();
 	Ele_Gen_Eta.clear();
